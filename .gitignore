@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Environment variables
+.env
+.env.*
+
+# Generated transcription history
+transcripts/*.json
+
+# Keep the transcripts folder
+!transcripts/.gitkeep
+
+# Audio/test files
+audio/
+*.wav
+*.mp3
+*.m4a
+*.mp4
+
+# macOS
+.DS_Store
+
+# IDE/editor files
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
