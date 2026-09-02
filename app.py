@@ -2,9 +2,7 @@ import streamlit as st
 import tempfile
 import json
 import os
-import uuid
 from datetime import datetime
-
 
 from speech.recognizer import recognize_speech
 
@@ -18,13 +16,6 @@ st.set_page_config(
     page_icon="🎤",
     layout="centered"
 )
-
-
-# ============================================================
-# CONSTANTS
-# ============================================================
-
-TRANSCRIPTS_FOLDER = "transcripts"
 
 
 # ============================================================
@@ -46,6 +37,9 @@ if "success_message" not in st.session_state:
 if "edit_mode" not in st.session_state:
     st.session_state.edit_mode = False
 
+if "edited_text" not in st.session_state:
+    st.session_state.edited_text = ""
+
 if "show_delete_all_confirmation" not in st.session_state:
     st.session_state.show_delete_all_confirmation = False
 
@@ -57,143 +51,56 @@ if "show_delete_all_confirmation" not in st.session_state:
 st.markdown(
     """
 <style>
+.stApp { background-color: var(--background-color); color: var(--text-color); }
+.block-container { max-width: 900px; padding-top: 2rem; padding-bottom: 3.5rem; }
 
-.stApp {
-    background-color: #f7f9fc;
+.hero { text-align: center; padding: 0.6rem 0 1.6rem 0; }
+.hero-badge { display:inline-block; padding:.38rem .8rem; border:1px solid var(--border-color); border-radius:999px; background:var(--secondary-background-color); color:var(--text-color); opacity:.78; font-size:.75rem; font-weight:700; letter-spacing:.04em; margin-bottom:.8rem; }
+.hero-icon { font-size:3rem; line-height:1; margin-bottom:.35rem; }
+.hero-title { margin:0; color:var(--text-color); font-size:2.65rem; line-height:1.12; font-weight:800; letter-spacing:-.04em; }
+.hero-title-accent { background:linear-gradient(90deg,#2563eb,#7c3aed); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+.main-subtitle { text-align:center; color:var(--text-color); opacity:.68; font-size:1.04rem; line-height:1.6; margin-top:.75rem; }
+.technology-text { text-align:center; color:var(--text-color); opacity:.5; font-size:.8rem; line-height:1.7; margin-top:.6rem; }
+
+.section-kicker { color:var(--text-color); opacity:.55; font-size:.74rem; font-weight:750; letter-spacing:.09em; text-transform:uppercase; margin-bottom:.2rem; }
+
+.recording-card { background:var(--secondary-background-color); border:1px solid var(--border-color); border-radius:20px; padding:1.4rem 1.5rem; margin:.35rem 0 1rem; box-shadow:0 10px 30px rgba(0,0,0,.04); }
+.recording-title-row { display:flex; align-items:center; gap:.65rem; margin-bottom:.45rem; }
+.recording-icon { width:40px; height:40px; display:flex; align-items:center; justify-content:center; border-radius:12px; background:rgba(37,99,235,.12); font-size:1.3rem; }
+.recording-title { color:var(--text-color); font-size:1.16rem; font-weight:750; }
+.recording-description { color:var(--text-color); opacity:.67; font-size:.93rem; line-height:1.6; }
+.recording-hint { margin-top:.8rem; color:var(--text-color); opacity:.5; font-size:.77rem; }
+
+.info-card { background:var(--secondary-background-color); border:1px solid var(--border-color); border-radius:16px; padding:1.05rem 1.15rem; text-align:center; min-height:108px; box-shadow:0 8px 24px rgba(0,0,0,.035); }
+.info-card-title { color:var(--text-color); opacity:.56; font-size:.78rem; font-weight:700; margin-bottom:.55rem; }
+.info-card-value { color:var(--text-color); font-size:1.25rem; font-weight:750; }
+.word-count { color:var(--text-color); opacity:.58; font-size:.8rem; margin-bottom:1rem; }
+
+.stButton > button, .stDownloadButton > button { width:100%; border-radius:11px; font-weight:650; min-height:45px; transition:transform .15s ease,box-shadow .15s ease; }
+.stButton > button:hover, .stDownloadButton > button:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(0,0,0,.08); }
+
+audio { width:100%; }
+.stCaption, [data-testid="stCaptionContainer"] { color:var(--text-color) !important; opacity:.68; }
+[data-testid="stExpander"] { border-color:var(--border-color); border-radius:14px; overflow:hidden; }
+
+.download-card { background:var(--secondary-background-color); border:1px solid var(--border-color); border-radius:15px; padding:.9rem 1rem .7rem; margin-bottom:.65rem; }
+.download-title { color:var(--text-color); font-weight:700; font-size:.9rem; }
+.download-description { color:var(--text-color); opacity:.55; font-size:.76rem; margin-top:.15rem; }
+.new-recording-card { text-align:center; background:var(--secondary-background-color); border:1px dashed var(--border-color); border-radius:18px; padding:1.25rem; margin:.35rem 0 .8rem; }
+.new-recording-title { color:var(--text-color); font-size:1rem; font-weight:700; }
+.new-recording-description { color:var(--text-color); opacity:.58; font-size:.82rem; margin-top:.35rem; }
+.history-summary { color:var(--text-color); opacity:.62; font-size:.84rem; margin-bottom:.65rem; }
+.history-meta { color:var(--text-color); opacity:.6; font-size:.82rem; }
+.history-transcript { background:var(--background-color); border:1px solid var(--border-color); border-radius:12px; padding:.9rem 1rem; color:var(--text-color); line-height:1.65; white-space:pre-wrap; word-break:break-word; margin-top:.35rem; }
+
+@media (max-width:640px) {
+  .block-container { padding:1.1rem 1rem 3rem; }
+  .hero { padding-bottom:1.15rem; }
+  .hero-title { font-size:2.05rem; }
+  .hero-icon { font-size:2.7rem; }
+  .main-subtitle { font-size:.95rem; }
+  .recording-card { padding:1.15rem; }
 }
-
-.block-container {
-    max-width: 900px;
-    padding-top: 2rem;
-    padding-bottom: 3rem;
-}
-
-h1 {
-    text-align: center;
-    font-size: 2.6rem !important;
-    font-weight: 700 !important;
-    margin-bottom: 0.3rem;
-}
-
-h2 {
-    font-weight: 650 !important;
-}
-
-h3 {
-    font-weight: 600 !important;
-}
-
-.main-subtitle {
-    text-align: center;
-    color: #6b7280;
-    font-size: 1.1rem;
-    line-height: 1.6;
-    margin-bottom: 0.8rem;
-}
-
-.technology-text {
-    text-align: center;
-    color: #9ca3af;
-    font-size: 0.85rem;
-    margin-bottom: 1.5rem;
-}
-
-.recording-card {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 18px;
-    padding: 1.5rem;
-    margin-top: 1rem;
-    margin-bottom: 1.2rem;
-}
-
-.recording-title {
-    font-size: 1.2rem;
-    font-weight: 650;
-    margin-bottom: 0.5rem;
-}
-
-.recording-description {
-    color: #6b7280;
-    font-size: 0.95rem;
-    line-height: 1.6;
-}
-
-.info-card {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 16px;
-    padding: 1.2rem;
-    text-align: center;
-    min-height: 105px;
-}
-
-.info-card-title {
-    color: #6b7280;
-    font-size: 0.85rem;
-    margin-bottom: 0.5rem;
-}
-
-.info-card-value {
-    font-size: 1.25rem;
-    font-weight: 650;
-}
-
-.word-count {
-    color: #6b7280;
-    font-size: 0.9rem;
-    margin-top: 0.4rem;
-    margin-bottom: 1rem;
-}
-
-.history-count {
-    color: #6b7280;
-    font-size: 0.9rem;
-}
-
-.stButton > button,
-.stDownloadButton > button {
-    width: 100%;
-    border-radius: 10px;
-    font-weight: 600;
-    min-height: 45px;
-}
-
-audio {
-    width: 100%;
-}
-
-@media (max-width: 600px) {
-
-    .block-container {
-        padding-left: 1rem;
-        padding-right: 1rem;
-        padding-top: 1rem;
-    }
-
-    h1 {
-        font-size: 2rem !important;
-    }
-
-    .main-subtitle {
-        font-size: 1rem;
-    }
-
-    .technology-text {
-        font-size: 0.75rem;
-    }
-
-    .recording-card {
-        padding: 1rem;
-    }
-
-    .info-card {
-        padding: 1rem;
-        min-height: 95px;
-    }
-
-}
-
 </style>
 """,
     unsafe_allow_html=True
@@ -201,15 +108,13 @@ audio {
 
 
 # ============================================================
-# HELPER FUNCTIONS
+# FUNCTIONS
 # ============================================================
 
 def get_language_name(language):
-    """
-    Convert language code into a user-friendly language name.
-    """
+    """Convert language code into a user-friendly name."""
 
-    language = str(language).strip().lower()
+    language = str(language).lower().strip()
 
     if language == "en":
         return "English 🇬🇧"
@@ -220,52 +125,9 @@ def get_language_name(language):
     return language.upper()
 
 
-def safe_confidence(value):
-    """
-    Safely convert confidence value into a number between 0 and 1.
-    """
-
-    try:
-        value = float(value)
-    except (TypeError, ValueError):
-        value = 0.0
-
-    return max(0.0, min(1.0, value))
-
-
-def generate_transcription_id():
-    """
-    Generate a unique ID for every transcription.
-    """
-
-    return uuid.uuid4().hex
-
-
-def get_timestamp_filename(timestamp):
-    """
-    Convert timestamp into a filename-safe string.
-    """
-
-    try:
-        dt = datetime.strptime(
-            timestamp,
-            "%Y-%m-%d %H:%M:%S"
-        )
-
-        return dt.strftime(
-            "%Y%m%d_%H%M%S"
-        )
-
-    except (ValueError, TypeError):
-
-        return datetime.now().strftime(
-            "%Y%m%d_%H%M%S"
-        )
-
-
-# ============================================================
-# HISTORY FUNCTIONS
-# ============================================================
+# ------------------------------------------------------------
+# SAVE TRANSCRIPTION
+# ------------------------------------------------------------
 
 def save_transcription(
     text,
@@ -273,41 +135,29 @@ def save_transcription(
     probability,
     timestamp=None
 ):
-    """
-    Save a transcription as a JSON file.
-    """
+    """Save one transcription as a JSON file."""
 
-    os.makedirs(
-        TRANSCRIPTS_FOLDER,
-        exist_ok=True
-    )
+    os.makedirs("transcripts", exist_ok=True)
 
     if timestamp is None:
         timestamp = datetime.now()
 
-    transcription_id = generate_transcription_id()
-
-    timestamp_string = timestamp.strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
-
-    filename = (
-        f"transcript_"
-        f"{timestamp.strftime('%Y%m%d_%H%M%S_%f')}"
-        f"_{transcription_id[:8]}.json"
+    filename = timestamp.strftime(
+        "transcript_%Y%m%d_%H%M%S_%f.json"
     )
 
     filepath = os.path.join(
-        TRANSCRIPTS_FOLDER,
+        "transcripts",
         filename
     )
 
     data = {
-        "id": transcription_id,
-        "timestamp": timestamp_string,
+        "timestamp": timestamp.strftime(
+            "%Y-%m-%d %H:%M:%S"
+        ),
         "language": language,
         "language_name": get_language_name(language),
-        "confidence": safe_confidence(probability),
+        "confidence": float(probability),
         "transcript": text
     }
 
@@ -324,23 +174,25 @@ def save_transcription(
             indent=4
         )
 
-    return transcription_id, filepath
+    return filepath
 
+
+# ------------------------------------------------------------
+# LOAD HISTORY
+# ------------------------------------------------------------
 
 def load_history():
-    """
-    Load all previous transcription JSON files.
-    """
+    """Load previous transcription JSON files."""
 
     history = []
 
-    if not os.path.exists(TRANSCRIPTS_FOLDER):
+    transcripts_folder = "transcripts"
+
+    if not os.path.exists(transcripts_folder):
         return history
 
     try:
-        filenames = os.listdir(
-            TRANSCRIPTS_FOLDER
-        )
+        filenames = os.listdir(transcripts_folder)
     except OSError:
         return history
 
@@ -350,7 +202,7 @@ def load_history():
             continue
 
         filepath = os.path.join(
-            TRANSCRIPTS_FOLDER,
+            transcripts_folder,
             filename
         )
 
@@ -364,44 +216,13 @@ def load_history():
 
                 data = json.load(file)
 
-            if not isinstance(data, dict):
-                continue
+            if isinstance(data, dict):
 
-            # ------------------------------------------------
-            # Backward compatibility
-            # ------------------------------------------------
+                # Internal field used only for
+                # editing/deleting history.
+                data["_filepath"] = filepath
 
-            if not data.get("id"):
-
-                data["id"] = (
-                    "legacy_"
-                    + os.path.splitext(filename)[0]
-                )
-
-            if not data.get("language_name"):
-
-                data["language_name"] = (
-                    get_language_name(
-                        data.get(
-                            "language",
-                            "unknown"
-                        )
-                    )
-                )
-
-            if "confidence" not in data:
-
-                data["confidence"] = 0.0
-
-            if "transcript" not in data:
-
-                data["transcript"] = ""
-
-            # Internal path.
-            # It is not included in downloaded JSON.
-            data["_filepath"] = filepath
-
-            history.append(data)
+                history.append(data)
 
         except (
             json.JSONDecodeError,
@@ -421,24 +242,24 @@ def load_history():
     return history
 
 
+# ------------------------------------------------------------
+# UPDATE HISTORY ITEM
+# ------------------------------------------------------------
+
 def update_history_file(
     filepath,
-    transcription_id,
     text,
     language,
     probability,
     timestamp
 ):
-    """
-    Update an existing history JSON file.
-    """
+    """Update an existing transcription JSON file."""
 
     data = {
-        "id": transcription_id,
         "timestamp": timestamp,
         "language": language,
         "language_name": get_language_name(language),
-        "confidence": safe_confidence(probability),
+        "confidence": float(probability),
         "transcript": text
     }
 
@@ -456,67 +277,25 @@ def update_history_file(
         )
 
 
+# ------------------------------------------------------------
+# DELETE HISTORY ITEM
+# ------------------------------------------------------------
+
 def delete_history_file(filepath):
-    """
-    Delete one history JSON file.
-    """
+    """Delete a transcription history file."""
 
-    if not filepath:
-        return False
+    if filepath and os.path.exists(filepath):
 
-    if not os.path.exists(filepath):
-        return False
+        os.remove(filepath)
 
-    os.remove(filepath)
+        return True
 
-    return True
+    return False
 
 
-def delete_all_history():
-    """
-    Delete all transcription history JSON files.
-    """
-
-    if not os.path.exists(TRANSCRIPTS_FOLDER):
-        return 0
-
-    deleted_count = 0
-
-    try:
-
-        filenames = os.listdir(
-            TRANSCRIPTS_FOLDER
-        )
-
-    except OSError:
-
-        return 0
-
-    for filename in filenames:
-
-        if not filename.lower().endswith(".json"):
-            continue
-
-        filepath = os.path.join(
-            TRANSCRIPTS_FOLDER,
-            filename
-        )
-
-        try:
-
-            os.remove(filepath)
-
-            deleted_count += 1
-
-        except OSError:
-            continue
-
-    return deleted_count
-
-
-# ============================================================
-# DOWNLOAD FUNCTIONS
-# ============================================================
+# ------------------------------------------------------------
+# TXT DOWNLOAD
+# ------------------------------------------------------------
 
 def create_txt_content(
     text,
@@ -524,9 +303,7 @@ def create_txt_content(
     probability,
     timestamp
 ):
-    """
-    Create TXT download content.
-    """
+    """Create TXT download content."""
 
     return (
         "Speech-to-Text Transcript\n"
@@ -540,24 +317,24 @@ def create_txt_content(
     )
 
 
+# ------------------------------------------------------------
+# JSON DOWNLOAD
+# ------------------------------------------------------------
+
 def create_json_content(
-    transcription_id,
     text,
     language,
     language_name,
     probability,
     timestamp
 ):
-    """
-    Create JSON download content.
-    """
+    """Create JSON download content."""
 
     data = {
-        "id": transcription_id,
         "timestamp": timestamp,
         "language": language,
         "language_name": language_name,
-        "confidence": safe_confidence(probability),
+        "confidence": float(probability),
         "transcript": text
     }
 
@@ -568,17 +345,15 @@ def create_json_content(
     )
 
 
-# ============================================================
+# ------------------------------------------------------------
 # PROCESS AUDIO
-# ============================================================
+# ------------------------------------------------------------
 
 def process_audio(
     audio_bytes,
     audio_id
 ):
-    """
-    Convert recorded audio into text.
-    """
+    """Convert audio into text."""
 
     temp_audio_path = None
 
@@ -589,15 +364,10 @@ def process_audio(
             suffix=".wav"
         ) as temp_audio:
 
-            temp_audio.write(
-                audio_bytes
-            )
-
+            temp_audio.write(audio_bytes)
             temp_audio.flush()
 
-            temp_audio_path = (
-                temp_audio.name
-            )
+            temp_audio_path = temp_audio.name
 
         with st.spinner(
             "🎧 Converting speech to text..."
@@ -607,14 +377,19 @@ def process_audio(
                 temp_audio_path
             )
 
-        text = (
-            str(text).strip()
-            if text
-            else ""
-        )
+        text = str(text).strip() if text else ""
 
-        probability = safe_confidence(
-            probability
+        try:
+            probability = float(probability)
+        except (
+            TypeError,
+            ValueError
+        ):
+            probability = 0.0
+
+        probability = max(
+            0.0,
+            min(1.0, probability)
         )
 
         language = str(
@@ -632,39 +407,31 @@ def process_audio(
 
         timestamp = datetime.now()
 
-        timestamp_string = timestamp.strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
+        result = {
+            "text": text,
+            "language": language,
+            "probability": probability,
+            "timestamp": timestamp.strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+        }
 
-        # ----------------------------------------------------
-        # Save to history
-        # ----------------------------------------------------
+        # Store result
+        st.session_state.transcription_result = result
 
-        transcription_id, filepath = save_transcription(
+        # Store processed audio ID
+        st.session_state.processed_audio_id = audio_id
+
+        # Exit edit mode if necessary
+        st.session_state.edit_mode = False
+
+        # Save history
+        save_transcription(
             text,
             language,
             probability,
             timestamp
         )
-
-        # ----------------------------------------------------
-        # Current result
-        # ----------------------------------------------------
-
-        result = {
-            "id": transcription_id,
-            "filepath": filepath,
-            "text": text,
-            "language": language,
-            "probability": probability,
-            "timestamp": timestamp_string
-        }
-
-        st.session_state.transcription_result = result
-
-        st.session_state.processed_audio_id = audio_id
-
-        st.session_state.edit_mode = False
 
         st.session_state.success_message = (
             "✅ Transcription completed and saved to history!"
@@ -686,10 +453,7 @@ def process_audio(
         ):
 
             try:
-
-                os.remove(
-                    temp_audio_path
-                )
+                os.remove(temp_audio_path)
 
             except OSError:
                 pass
@@ -699,24 +463,14 @@ def process_audio(
 # HEADER
 # ============================================================
 
-st.title(
-    "🎤 Bilingual Voice Transcriber"
-)
-
 st.markdown(
     """
-<div class="main-subtitle">
-Convert your voice into text instantly<br>
-English 🇬🇧 &nbsp;•&nbsp; Hindi 🇮🇳
-</div>
-""",
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    """
-<div class="technology-text">
-Powered by Python • Streamlit • faster-whisper
+<div class="hero">
+    <div class="hero-badge">✨ AI-POWERED SPEECH RECOGNITION</div>
+    <div class="hero-icon">🎙️</div>
+    <h1 class="hero-title">Bilingual Voice <span class="hero-title-accent">Transcriber</span></h1>
+    <div class="main-subtitle">Turn your voice into accurate text in seconds.<br>Speak naturally in English or Hindi.</div>
+    <div class="technology-text">🇬🇧 English &nbsp;•&nbsp; 🇮🇳 Hindi &nbsp;•&nbsp; Automatic language detection<br>Powered by Python • Streamlit • faster-whisper</div>
 </div>
 """,
     unsafe_allow_html=True
@@ -730,12 +484,12 @@ Powered by Python • Streamlit • faster-whisper
 st.markdown(
     """
 <div class="recording-card">
-<div class="recording-title">🎙️ Record Your Voice</div>
-<div class="recording-description">
-Speak naturally in English or Hindi.<br>
-The application automatically detects the language
-and converts your speech into text.
-</div>
+    <div class="recording-title-row">
+        <div class="recording-icon">🎤</div>
+        <div class="recording-title">Record Your Voice</div>
+    </div>
+    <div class="recording-description">Speak naturally and let the app automatically detect your language and convert your speech into text.</div>
+    <div class="recording-hint">🔒 Your recording is processed only for transcription.</div>
 </div>
 """,
     unsafe_allow_html=True
@@ -761,23 +515,18 @@ if audio:
 
     audio_bytes = audio.getvalue()
 
-    audio_id = hash(
-        audio_bytes
-    )
+    audio_id = hash(audio_bytes)
 
     st.success(
-        "✅ Audio recorded successfully!"
+        "✅ Recording captured successfully. Ready to transcribe!"
     )
 
-    st.subheader(
-        "🔊 Your Recording"
+    st.markdown(
+        '<div class="section-kicker">YOUR RECORDING</div>',
+        unsafe_allow_html=True
     )
 
-    st.audio(
-        audio_bytes
-    )
-
-    st.divider()
+    st.audio(audio_bytes)
 
     # --------------------------------------------------------
     # CONVERT BUTTON
@@ -841,25 +590,13 @@ if result:
         "unknown"
     )
 
-    probability = safe_confidence(
-        result.get(
-            "probability",
-            0.0
-        )
+    probability = result.get(
+        "probability",
+        0.0
     )
 
     timestamp = result.get(
         "timestamp",
-        ""
-    )
-
-    transcription_id = result.get(
-        "id",
-        ""
-    )
-
-    filepath = result.get(
-        "filepath",
         ""
     )
 
@@ -873,6 +610,10 @@ if result:
 
     st.divider()
 
+    st.markdown(
+        '<div class="section-kicker">RESULT</div>',
+        unsafe_allow_html=True
+    )
     st.subheader(
         "📊 Recognition Result"
     )
@@ -923,35 +664,11 @@ if result:
 
     if st.session_state.edit_mode:
 
-        st.caption(
-            "✏️ Make changes to your transcript below."
-        )
-
         edited_text = st.text_area(
-            "Edit Transcript",
+            "Edit your transcript:",
             value=text,
             height=180,
-            key="transcript_editor",
-            label_visibility="collapsed"
-        )
-
-        edited_word_count = len(
-            edited_text.strip().split()
-        )
-
-        edited_character_count = len(
-            edited_text.strip()
-        )
-
-        st.markdown(
-            f"""
-<div class="word-count">
-📝 {edited_word_count} word(s)
-&nbsp;•&nbsp;
-🔤 {edited_character_count} character(s)
-</div>
-""",
-            unsafe_allow_html=True
+            key="transcript_editor"
         )
 
         col1, col2 = st.columns(2)
@@ -964,9 +681,7 @@ if result:
                 type="primary"
             ):
 
-                edited_text = (
-                    edited_text.strip()
-                )
+                edited_text = edited_text.strip()
 
                 if not edited_text:
 
@@ -976,77 +691,50 @@ if result:
 
                 else:
 
-                    try:
+                    filepath = None
 
-                        # ------------------------------------
-                        # Update JSON history file
-                        # ------------------------------------
+                    # Find matching history entry
+                    history_items = load_history()
 
-                        if filepath and os.path.exists(filepath):
+                    for item in history_items:
 
-                            update_history_file(
-                                filepath,
-                                transcription_id,
-                                edited_text,
-                                language,
-                                probability,
-                                timestamp
+                        if (
+                            item.get("transcript", "")
+                            == text
+                            and
+                            item.get("timestamp", "")
+                            == timestamp
+                        ):
+
+                            filepath = item.get(
+                                "_filepath"
                             )
 
-                        else:
+                            break
 
-                            # --------------------------------
-                            # Find file using unique ID
-                            # --------------------------------
+                    # Update history JSON
+                    if filepath:
 
-                            history_items = load_history()
-
-                            for item in history_items:
-
-                                if (
-                                    item.get("id")
-                                    == transcription_id
-                                ):
-
-                                    filepath = item.get(
-                                        "_filepath",
-                                        ""
-                                    )
-
-                                    break
-
-                            if filepath:
-
-                                update_history_file(
-                                    filepath,
-                                    transcription_id,
-                                    edited_text,
-                                    language,
-                                    probability,
-                                    timestamp
-                                )
-
-                        # ------------------------------------
-                        # Update current result
-                        # ------------------------------------
-
-                        st.session_state.transcription_result[
-                            "text"
-                        ] = edited_text
-
-                        st.session_state.edit_mode = False
-
-                        st.session_state.success_message = (
-                            "✅ Transcript updated successfully!"
+                        update_history_file(
+                            filepath,
+                            edited_text,
+                            language,
+                            probability,
+                            timestamp
                         )
 
-                        st.rerun()
+                    # Update current result
+                    st.session_state.transcription_result[
+                        "text"
+                    ] = edited_text
 
-                    except OSError as error:
+                    st.session_state.edit_mode = False
 
-                        st.error(
-                            f"❌ Unable to save changes: {error}"
-                        )
+                    st.success(
+                        "✅ Transcript updated successfully!"
+                    )
+
+                    st.rerun()
 
         with col2:
 
@@ -1069,54 +757,60 @@ if result:
             border=True
         ):
 
-            if text:
-
-                st.write(text)
-
-            else:
-
-                st.caption(
-                    "No transcript available."
-                )
+            st.write(text)
 
         word_count = len(
             text.split()
-        )
-
-        character_count = len(
-            text
         )
 
         st.markdown(
             f"""
 <div class="word-count">
 📝 {word_count} word(s)
-&nbsp;•&nbsp;
-🔤 {character_count} character(s)
 </div>
 """,
             unsafe_allow_html=True
         )
 
         # ----------------------------------------------------
-        # EDIT BUTTON
+        # COPY + EDIT
         # ----------------------------------------------------
 
-        if st.button(
-            "✏️ Edit Transcript",
-            use_container_width=True
-        ):
+        col1, col2 = st.columns(2)
 
-            st.session_state.edit_mode = True
+        with col1:
 
-            st.rerun()
+            # st.code provides a built-in copy button.
+            # A small hidden duplicate is avoided by using
+            # the code block only for copying.
+
+            if st.button(
+                "📋 Copy Transcript",
+                use_container_width=True
+            ):
+
+                st.info(
+                    "💡 Use the copy icon shown on the "
+                    "transcript code box below."
+                )
+
+        with col2:
+
+            if st.button(
+                "✏️ Edit Transcript",
+                use_container_width=True
+            ):
+
+                st.session_state.edit_mode = True
+
+                st.rerun()
 
         # ----------------------------------------------------
         # COPYABLE TRANSCRIPT
         # ----------------------------------------------------
 
         st.caption(
-            "📋 Copy transcript:"
+            "📋 Copyable transcript:"
         )
 
         st.code(
@@ -1124,20 +818,21 @@ if result:
             language=None
         )
 
-        st.caption(
-            "💡 Click the copy icon in the transcript box."
-        )
-
 
     # ========================================================
-    # DOWNLOAD CURRENT TRANSCRIPT
+    # DOWNLOAD SECTION
     # ========================================================
 
     st.divider()
 
+    st.markdown(
+        '<div class="section-kicker">EXPORT</div>',
+        unsafe_allow_html=True
+    )
     st.subheader(
         "💾 Save Transcript"
     )
+    st.caption("Keep a copy of your transcript in the format that suits you best.")
 
     txt_content = create_txt_content(
         text,
@@ -1147,7 +842,6 @@ if result:
     )
 
     json_content = create_json_content(
-        transcription_id,
         text,
         language,
         language_name,
@@ -1155,10 +849,8 @@ if result:
         timestamp
     )
 
-    filename_timestamp = (
-        get_timestamp_filename(
-            timestamp
-        )
+    download_timestamp = datetime.now().strftime(
+        "%Y%m%d_%H%M%S"
     )
 
     col1, col2 = st.columns(2)
@@ -1169,8 +861,7 @@ if result:
             label="📄 Download TXT",
             data=txt_content,
             file_name=(
-                f"transcript_"
-                f"{filename_timestamp}.txt"
+                f"transcript_{download_timestamp}.txt"
             ),
             mime="text/plain",
             use_container_width=True
@@ -1182,8 +873,7 @@ if result:
             label="📋 Download JSON",
             data=json_content,
             file_name=(
-                f"transcript_"
-                f"{filename_timestamp}.json"
+                f"transcript_{download_timestamp}.json"
             ),
             mime="application/json",
             use_container_width=True
@@ -1191,17 +881,24 @@ if result:
 
 
 # ============================================================
-# NEW RECORDING
+# CLEAR CURRENT RECORDING
 # ============================================================
 
 st.divider()
 
-st.subheader(
-    "🔄 New Recording"
+st.markdown(
+    '<div class="section-kicker">CONTINUE</div>',
+    unsafe_allow_html=True
 )
 
-st.caption(
-    "Start a new recording without deleting your saved history."
+st.markdown(
+    """
+<div class="new-recording-card">
+    <div class="new-recording-title">🔄 Ready for another recording?</div>
+    <div class="new-recording-description">Start fresh while keeping your saved transcription history.</div>
+</div>
+""",
+    unsafe_allow_html=True
 )
 
 if st.button(
@@ -1210,14 +907,13 @@ if st.button(
 ):
 
     st.session_state.transcription_result = None
-
     st.session_state.processed_audio_id = None
-
     st.session_state.edit_mode = False
-
     st.session_state.audio_input_key += 1
 
-    st.session_state.success_message = None
+    st.success(
+        "✅ Current recording and transcript cleared."
+    )
 
     st.rerun()
 
@@ -1228,6 +924,10 @@ if st.button(
 
 st.divider()
 
+st.markdown(
+    '<div class="section-kicker">YOUR SAVED WORK</div>',
+    unsafe_allow_html=True
+)
 st.subheader(
     "📚 Transcription History"
 )
@@ -1235,443 +935,260 @@ st.subheader(
 history = load_history()
 
 
-# ============================================================
-# HISTORY EMPTY
-# ============================================================
-
 if not history:
 
     st.info(
         "No previous transcriptions found."
     )
 
-
 else:
 
-    # --------------------------------------------------------
-    # HISTORY HEADER
-    # --------------------------------------------------------
-
     st.markdown(
-        f"""
-<div class="history-count">
-📚 {len(history)} transcription(s) saved
-</div>
-""",
+        f'<div class="history-summary">{len(history)} saved transcription(s)</div>',
         unsafe_allow_html=True
     )
 
-    st.write("")
+    for index, item in enumerate(history):
 
-    # --------------------------------------------------------
-    # SEARCH + FILTER
-    # --------------------------------------------------------
-
-    search_text = st.text_input(
-        "🔎 Search history",
-        placeholder="Search by transcript text...",
-        key="history_search"
-    )
-
-    language_filter = st.selectbox(
-        "🌐 Filter by language",
-        [
-            "All Languages",
-            "English",
-            "Hindi"
-        ],
-        key="history_language_filter"
-    )
-
-    # --------------------------------------------------------
-    # FILTER HISTORY
-    # --------------------------------------------------------
-
-    filtered_history = []
-
-    for item in history:
-
-        transcript = str(
-            item.get(
-                "transcript",
-                ""
-            )
+        language = item.get(
+            "language",
+            "unknown"
         )
-
-        language = str(
-            item.get(
-                "language",
-                ""
-            )
-        ).lower()
 
         language_name = item.get(
             "language_name",
             get_language_name(language)
         )
 
-        # Search filter
-        if search_text:
-
-            if search_text.lower() not in transcript.lower():
-
-                continue
-
-        # Language filter
-        if language_filter == "English":
-
-            if language != "en":
-
-                continue
-
-        elif language_filter == "Hindi":
-
-            if language != "hi":
-
-                continue
-
-        filtered_history.append(
-            item
+        timestamp = item.get(
+            "timestamp",
+            "Unknown date"
         )
 
-    # --------------------------------------------------------
-    # FILTER RESULT
-    # --------------------------------------------------------
-
-    if not filtered_history:
-
-        st.info(
-            "🔎 No matching transcriptions found."
+        confidence = item.get(
+            "confidence",
+            0.0
         )
 
-    else:
-
-        st.caption(
-            f"Showing {len(filtered_history)} "
-            f"of {len(history)} transcription(s)"
+        transcript = item.get(
+            "transcript",
+            ""
         )
 
-        # ----------------------------------------------------
-        # HISTORY ITEMS
-        # ----------------------------------------------------
+        filepath = item.get(
+            "_filepath",
+            ""
+        )
 
-        for index, item in enumerate(
-            filtered_history
+        try:
+
+            confidence = float(
+                confidence
+            )
+
+        except (
+            TypeError,
+            ValueError
         ):
 
-            item_id = item.get(
-                "id",
-                f"history_{index}"
-            )
+            confidence = 0.0
 
-            language = item.get(
-                "language",
-                "unknown"
-            )
+        # ----------------------------------------------------
+        # HISTORY EXPANDER
+        # ----------------------------------------------------
 
-            language_name = item.get(
-                "language_name",
-                get_language_name(language)
-            )
+        with st.expander(
+            f"{language_name} — {timestamp}",
+            expanded=False
+        ):
 
-            timestamp = item.get(
-                "timestamp",
-                "Unknown date"
-            )
+            col1, col2 = st.columns(2)
 
-            transcript = str(
-                item.get(
-                    "transcript",
-                    ""
+            with col1:
+
+                st.caption(
+                    "🌐 Language"
                 )
-            )
 
-            confidence = safe_confidence(
-                item.get(
-                    "confidence",
-                    0.0
+                st.write(
+                    language_name
                 )
+
+            with col2:
+
+                st.caption(
+                    "📊 Confidence"
+                )
+
+                st.write(
+                    f"{confidence:.2%}"
+                )
+
+            st.caption(
+                "📝 Transcript"
             )
 
-            filepath = item.get(
-                "_filepath",
-                ""
+            with st.container(
+                border=True
+            ):
+
+                if transcript:
+
+                    st.write(
+                        transcript
+                    )
+
+                else:
+
+                    st.caption(
+                        "No transcript available."
+                    )
+
+            st.caption(
+                f"📝 {len(str(transcript).split())} word(s)"
             )
 
             # ------------------------------------------------
-            # HISTORY EXPANDER
+            # DELETE HISTORY
             # ------------------------------------------------
 
-            with st.expander(
-                f"{language_name} — {timestamp}",
-                expanded=False
-            ):
-
-                # --------------------------------------------
-                # DETAILS
-                # --------------------------------------------
-
-                col1, col2 = st.columns(2)
-
-                with col1:
-
-                    st.caption(
-                        "🌐 Language"
-                    )
-
-                    st.write(
-                        language_name
-                    )
-
-                with col2:
-
-                    st.caption(
-                        "📊 Confidence"
-                    )
-
-                    st.write(
-                        f"{confidence:.2%}"
-                    )
-
-                st.caption(
-                    "📝 Transcript"
-                )
-
-                with st.container(
-                    border=True
-                ):
-
-                    if transcript:
-
-                        st.write(
-                            transcript
-                        )
-
-                    else:
-
-                        st.caption(
-                            "No transcript available."
-                        )
-
-                history_word_count = len(
-                    transcript.split()
-                )
-
-                history_character_count = len(
-                    transcript
-                )
-
-                st.markdown(
-                    f"""
-<div class="word-count">
-📝 {history_word_count} word(s)
-&nbsp;•&nbsp;
-🔤 {history_character_count} character(s)
-</div>
-""",
-                    unsafe_allow_html=True
-                )
-
-                # --------------------------------------------
-                # COPY
-                # --------------------------------------------
-
-                st.caption(
-                    "📋 Copy transcript:"
-                )
-
-                st.code(
-                    transcript,
-                    language=None
-                )
-
-                # --------------------------------------------
-                # DOWNLOAD HISTORY ITEM
-                # --------------------------------------------
-
-                history_txt = create_txt_content(
-                    transcript,
-                    language_name,
-                    confidence,
-                    timestamp
-                )
-
-                history_json = create_json_content(
-                    item_id,
-                    transcript,
-                    language,
-                    language_name,
-                    confidence,
-                    timestamp
-                )
-
-                history_filename_timestamp = (
-                    get_timestamp_filename(
-                        timestamp
-                    )
-                )
-
-                st.write("")
-
-                download_col1, download_col2 = (
-                    st.columns(2)
-                )
-
-                with download_col1:
-
-                    st.download_button(
-                        label="📄 Download TXT",
-                        data=history_txt,
-                        file_name=(
-                            f"transcript_"
-                            f"{history_filename_timestamp}.txt"
-                        ),
-                        mime="text/plain",
-                        use_container_width=True,
-                        key=(
-                            f"history_txt_"
-                            f"{item_id}"
-                        )
-                    )
-
-                with download_col2:
-
-                    st.download_button(
-                        label="📋 Download JSON",
-                        data=history_json,
-                        file_name=(
-                            f"transcript_"
-                            f"{history_filename_timestamp}.json"
-                        ),
-                        mime="application/json",
-                        use_container_width=True,
-                        key=(
-                            f"history_json_"
-                            f"{item_id}"
-                        )
-                    )
-
-                # --------------------------------------------
-                # DELETE
-                # --------------------------------------------
-
-                st.write("")
-
-                if st.button(
-                    "🗑️ Delete This Transcription",
-                    key=f"delete_history_{item_id}",
-                    use_container_width=True
-                ):
-
-                    try:
-
-                        if delete_history_file(
-                            filepath
-                        ):
-
-                            current_result = (
-                                st.session_state.transcription_result
-                            )
-
-                            if current_result:
-
-                                if (
-                                    current_result.get("id")
-                                    == item_id
-                                ):
-
-                                    st.session_state.transcription_result = None
-
-                                    st.session_state.processed_audio_id = None
-
-                            st.session_state.success_message = (
-                                "✅ Transcription deleted successfully!"
-                            )
-
-                            st.rerun()
-
-                        else:
-
-                            st.error(
-                                "❌ Could not delete transcription."
-                            )
-
-                    except OSError as error:
-
-                        st.error(
-                            f"❌ Unable to delete transcription: {error}"
-                        )
-
-
-    # ========================================================
-    # DELETE ALL HISTORY
-    # ========================================================
-
-    st.divider()
-
-    if not st.session_state.show_delete_all_confirmation:
-
-        if st.button(
-            "🗑️ Delete All History",
-            use_container_width=True
-        ):
-
-            st.session_state.show_delete_all_confirmation = True
-
-            st.rerun()
-
-    else:
-
-        st.warning(
-            "⚠️ Are you sure you want to delete ALL "
-            "transcription history? This action cannot be undone."
-        )
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-
             if st.button(
-                "🗑️ Yes, Delete All",
-                use_container_width=True,
-                type="primary"
-            ):
-
-                deleted_count = (
-                    delete_all_history()
-                )
-
-                st.session_state.show_delete_all_confirmation = False
-
-                st.session_state.transcription_result = None
-
-                st.session_state.processed_audio_id = None
-
-                st.success(
-                    f"✅ {deleted_count} transcription(s) deleted."
-                )
-
-                st.rerun()
-
-        with col2:
-
-            if st.button(
-                "❌ Cancel",
+                "🗑️ Delete This Transcription",
+                key=f"delete_history_{index}",
                 use_container_width=True
             ):
 
-                st.session_state.show_delete_all_confirmation = False
+                try:
 
-                st.rerun()
+                    if delete_history_file(
+                        filepath
+                    ):
 
+                        # If deleted history is the
+                        # currently displayed result,
+                        # clear current result too.
+
+                        current_result = (
+                            st.session_state.transcription_result
+                        )
+
+                        if current_result:
+
+                            if (
+                                current_result.get("text")
+                                == transcript
+                                and
+                                current_result.get("timestamp")
+                                == timestamp
+                            ):
+
+                                st.session_state.transcription_result = None
+
+                        st.success(
+                            "✅ Transcription deleted successfully!"
+                        )
+
+                        st.rerun()
+
+                    else:
+
+                        st.error(
+                            "❌ Could not delete transcription."
+                        )
+
+                except OSError as error:
+
+                    st.error(
+                        f"❌ Unable to delete file: {error}"
+                    )
 
 # ============================================================
-# FOOTER
+# DELETE ALL HISTORY
 # ============================================================
 
 st.divider()
 
-st.caption(
-    "🎤 Bilingual Voice Transcriber • "
-    "English & Hindi Speech Recognition"
+st.markdown(
+    '<div class="section-kicker">HISTORY MANAGEMENT</div>',
+    unsafe_allow_html=True
 )
+
+st.subheader("🗑️ Manage History")
+
+st.caption(
+    "Permanently remove all saved transcription history from this app."
+)
+
+if not st.session_state.show_delete_all_confirmation:
+
+    if st.button(
+        "🗑️ Delete All History",
+        use_container_width=True,
+        type="primary",
+        key="delete_all_history"
+    ):
+        st.session_state.show_delete_all_confirmation = True
+        st.rerun()
+
+else:
+
+    st.warning(
+        "⚠️ This will permanently delete all saved transcription "
+        "history. This action cannot be undone."
+    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        if st.button(
+            "✅ Yes, Delete Everything",
+            use_container_width=True,
+            type="primary",
+            key="confirm_delete_all_history"
+        ):
+
+            deleted_count = 0
+            delete_failed = 0
+
+            for item in load_history():
+
+                filepath = item.get("_filepath", "")
+
+                try:
+
+                    if delete_history_file(filepath):
+                        deleted_count += 1
+                    else:
+                        delete_failed += 1
+
+                except OSError:
+                    delete_failed += 1
+
+            st.session_state.transcription_result = None
+            st.session_state.processed_audio_id = None
+            st.session_state.edit_mode = False
+            st.session_state.show_delete_all_confirmation = False
+
+            if delete_failed:
+                st.error(
+                    f"❌ Deleted {deleted_count} transcription(s), "
+                    f"but {delete_failed} could not be deleted."
+                )
+            else:
+                st.success(
+                    f"✅ All history deleted successfully! "
+                    f"{deleted_count} transcription(s) removed."
+                )
+
+            st.rerun()
+
+    with col2:
+
+        if st.button(
+            "❌ Cancel",
+            use_container_width=True,
+            key="cancel_delete_all_history"
+        ):
+            st.session_state.show_delete_all_confirmation = False
+            st.rerun()
